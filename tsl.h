@@ -6,7 +6,6 @@
 
 #include <ucontext.h>
 
-
 #define TSL_MAXTHREADS 256 // maximum number of threads (including the main thread) that an application can have.
 #define TSL_STACKSIZE  32768 // bytes, i.e., 32 KB. This is the stack size for a new thread. 
 
@@ -23,8 +22,8 @@
 
 
 int tsl_init(int salg);
-int tsl_create_thread (void (*tsf)(void *), void *targ);
-int tsl_yield (int tid);
+int tsl_create_thread(void (*tsf)(void*), void* targ);
+int tsl_yield(int tid);
 int tsl_exit();
 int tsl_join(int tid);
 int tsl_cancel(int tid);
