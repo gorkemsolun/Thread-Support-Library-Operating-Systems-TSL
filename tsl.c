@@ -20,9 +20,81 @@
 // you can also define and use global variables here.
 // you can define and use additional functions (as many as you wish) 
 // in this file; besides the tsl library functions desribed in the assignment. 
-// these additional functions will not be available for 
-// applications directly. 
+// these additional functions will not be available for applications directly. 
 
+// TCB structure
+typedef struct TCB {
+    int tid; // thread identifier
+    unsigned int state; // thread state
+    ucontext_t context; // pointer to context structure
+    char* stack; // pointer to stack
+} TCB;
+
+
+// Queue implementation
+typedef struct QueueNode {
+    TCB* tcb; // pointer to TCB
+    struct QueueNode* next; // pointer to next node
+} QueueNode;
+
+typedef struct tcbQueue {
+    QueueNode* front; // pointer to front of the queue
+    QueueNode* rear; // pointer to rear of the queue
+} tcbQueue;
+
+tcbQueue* createTCBQueue() {
+    tcbQueue* queue = (tcbQueue*)malloc(sizeof(tcbQueue));
+    queue->front = NULL;
+    queue->rear = NULL;
+    return queue;
+}
+
+void enqueue(tcbQueue* queue, TCB* tcb) {
+    QueueNode* newNode = (QueueNode*)malloc(sizeof(QueueNode));
+    newNode->tcb = tcb;
+    newNode->next = NULL;
+
+    if (queue->rear == NULL) {
+        queue->front = newNode;
+        queue->rear = newNode;
+    } else {
+        queue->rear->next = newNode;
+        queue->rear = newNode;
+    }
+}
+
+TCB* dequeue(tcbQueue* queue) {
+    if (queue->front == NULL) {
+        return NULL;
+    }
+
+    QueueNode* temp = queue->front;
+    TCB* tcb = temp->tcb;
+    queue->front = queue->front->next;
+
+    if (queue->front == NULL) {
+        queue->rear = NULL;
+    }
+
+    free(temp);
+    return tcb;
+}
+
+int isReadyQueueEmpty(tcbQueue* queue) {
+    return queue->front == NULL;
+}
+
+// Queue implementation end
+
+// Define states
+#define TSL_RUNNING 1
+#define TSL_READY 2
+
+// Global variables
+
+tcbQueue* readyQueue; // ready queue
+tcbQueue* runningQueue; // running queue
+int next_tid = 1; // next thread id
 int tsl_init(int salg);
 int tsl_create_thread(void (*tsf)(void*), void* targ);
 int tsl_yield(int tid);
@@ -35,6 +107,16 @@ int tsl_gettid();
 // This function will be called exatcly once
 // salg is the scheduling algorithm to be used
 int tsl_init(int salg) {
+
+    readyQueue = createReadyQueue();
+    runningQueue = createRunningQueue();
+
+    // Add current(main) thread's TCB to running queue
+    TCB* mainTCB = (TCB*)malloc(sizeof(TCB));
+    mainTCB->tid = next_tid++; // Assuming main thread has tid 1
+    mainTCB->state = TSL_RUNNING; // Set state to running
+    mainTCB->stack = NULL; // No stack for main thread
+    enqueue(runningQueue, mainTCB);
 
     int success = 1;
     if (success) {
@@ -115,4 +197,15 @@ int tsl_cancel(int tid) {
 int tsl_gettid() {
 
     return 0; // TODO: return the thread id of the calling thread
+}
+
+
+// TODO: STUB SHOULD BE PUT IN THE CORRECT PLACE
+// stub wrapper function for the thread start function
+void stub(void (*tsf) (void*), void* targ) {
+    // new thread will start its execution here
+    tsf(targ); // then we will call the thread start function
+
+    // tsf will retun to here
+    tsl_exit(); // now ask for termination
 }
