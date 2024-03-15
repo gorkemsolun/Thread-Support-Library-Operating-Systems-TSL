@@ -3,14 +3,40 @@
 #include <ucontext.h>
 #include <stdlib.h>
 
+/* redundant
+#undef EAX
+#undef ECX
+#undef EDX
+#undef EBX
+#undef ESP
+#undef EBP
+#undef ESI
+#undef EDI
+#undef EIP
+#ifdef __linux__
+#include <sys/ucontext.h>
+#endif
+*/
+
 #define STACK_SIZE 4096
 
+ucontext_t uc_main;
+int n = 10;
+int count = 0;
+
 void fun() {
+    ucontext_t uc_fun;
+    getcontext(&uc_fun);
+
+    count++;
     printf("fun\n");
+    
+    swapcontext(&uc_fun, &uc_main);
+    //setcontext(&uc_main);
 }
 
 int main() {
-    ucontext_t uc_main, uc_fun;
+    ucontext_t uc_fun;
     void *fun_stack, *main_stack;
 
     // Allocate stack for main
@@ -43,7 +69,10 @@ int main() {
     printf("main\n");
 
     // Switch to fun context
-    setcontext(&uc_fun);
+    if(count < n) {
+        //setcontext(&uc_fun);
+        swapcontext(&uc_main, &uc_fun);
+    }
     //swapcontext(&uc_main, &uc_fun);
     printf("back to main\n");
 
