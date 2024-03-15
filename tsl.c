@@ -49,6 +49,7 @@ tcbQueue* createTCBQueue() {
     return queue;
 }
 
+// Create a new ready queue
 void enqueue(tcbQueue* queue, TCB* tcb) {
     QueueNode* newNode = (QueueNode*)malloc(sizeof(QueueNode));
     newNode->tcb = tcb;
@@ -63,6 +64,7 @@ void enqueue(tcbQueue* queue, TCB* tcb) {
     }
 }
 
+// Dequeue from the queue
 TCB* dequeue(tcbQueue* queue) {
     if (queue->front == NULL) {
         return NULL;
@@ -80,6 +82,7 @@ TCB* dequeue(tcbQueue* queue) {
     return tcb;
 }
 
+// Check if the queue is empty
 int isReadyQueueEmpty(tcbQueue* queue) {
     return queue->front == NULL;
 }
@@ -92,6 +95,7 @@ int isReadyQueueEmpty(tcbQueue* queue) {
 
 // Global variables
 
+int currentThreadCount = 0; // Current number of threads
 tcbQueue* readyQueue; // ready queue
 tcbQueue* runningQueue; // running queue
 int next_tid = 1; // next thread id
@@ -118,7 +122,7 @@ int tsl_init(int salg) {
     mainTCB->stack = NULL; // No stack for main thread
     enqueue(runningQueue, mainTCB);
 
-    int success = 1;
+    int success = 1;// TODO: Success should be handled
     if (success) {
         return 0;
     } else {
@@ -134,14 +138,51 @@ int tsl_init(int salg) {
 // targ is a pointer to a value or structure that will be passed to the thread start function, if nothing is to be passed, it will be NULL
 // The function will return the thread id(tid) of the new thread, unique among all threads in the application
 int tsl_create_thread(void (*tsf)(void*), void* targ) {
-    int tid = 0; // TODO: generate a unique thread id
+    if (currentThreadCount >= TSL_MAXTHREADS) {
+        return TSL_ERROR; // Maximum number of threads reached
+    }
 
-    int success = 1;
+    // Create a new TCB for the new thread
+    TCB* newTCB = (TCB*)malloc(sizeof(TCB));
+    newTCB->tid = next_tid++;
+    newTCB->state = TSL_READY;
+    newTCB->stack = malloc(TSL_STACKSIZE); // TODO: this should be checked // Allocate memory for the stack
+
+    enqueue(readyQueue, newTCB); // Add the new thread to the ready queue
+
+    currentThreadCount++; // Increment the number of threads
+
+    // Create a new context for the new thread
+    getcontext(&newTCB->context);
+
+    // TODO: this should be checked
+    newTCB->context.uc_mcontext.gregs[REG_EIP] = (unsigned int)stub; // Set the instruction pointer to the stub function
+    newTCB->context.uc_mcontext.gregs[REG_ESP] = (unsigned int)newTCB->stack; // Set the stack pointer to the top of the stack
+    newTCB->stack += TSL_STACKSIZE; // Move the stack pointer to the bottom of the stack
+
+    // TODO: this should be checked // Initialize the stack by putting tsl and targ into the stack
+    unsigned int* stack_ptr = (unsigned int*)newTCB->context.uc_mcontext.gregs[REG_ESP];
+    *stack_ptr-- = (unsigned int)targ; // Push targ onto the stack
+    *stack_ptr-- = (unsigned int)tsf; // Push tsf onto the stack
+
+    int success = 1; // TODO: Success should be handled
     if (success) {
-        return tid;
+        return newTCB->tid;
     } else {
         return TSL_ERROR;
     }
+}
+
+
+// TODO: STUB should be implemented
+// TODO: STUB SHOULD BE PUT IN THE CORRECT PLACE
+// stub wrapper function for the thread start function
+void stub(void (*tsf) (void*), void* targ) {
+    // new thread will start its execution here
+    tsf(targ); // then we will call the thread start function
+
+    // tsf will retun to here
+    tsl_exit(); // now ask for termination
 }
 
 // yields the processor to another thread, a context switch will occur
@@ -197,15 +238,4 @@ int tsl_cancel(int tid) {
 int tsl_gettid() {
 
     return 0; // TODO: return the thread id of the calling thread
-}
-
-
-// TODO: STUB SHOULD BE PUT IN THE CORRECT PLACE
-// stub wrapper function for the thread start function
-void stub(void (*tsf) (void*), void* targ) {
-    // new thread will start its execution here
-    tsf(targ); // then we will call the thread start function
-
-    // tsf will retun to here
-    tsl_exit(); // now ask for termination
 }
