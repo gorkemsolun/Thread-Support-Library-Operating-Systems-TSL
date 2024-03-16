@@ -125,8 +125,8 @@ TCB* removeFromQueue(tcbQueue* queue, int tid);
 // salg is the scheduling algorithm to be used
 int tsl_init(int salg) {
 
-    readyQueue = createTCBQueue(); //createReadyQueue();
-    runningQueue = createTCBQueue(); //createRunningQueue();
+    readyQueue = createReadyQueue();
+    runningQueue = createRunningQueue();
 
     // Add current(main) thread's TCB to running queue
     TCB* mainTCB = (TCB*)malloc(sizeof(TCB));
