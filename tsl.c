@@ -107,9 +107,12 @@ int isReadyQueueEmpty(tcbQueue* queue) {
 
 // Global variables
 
+unsigned int readyQueueSize = 0;
+unsigned int schedulingAlg; // 1 is FCFS, 2 is random
 int currentThreadCount = 0; // Current number of threads
 tcbQueue* readyQueue; // ready queue
-tcbQueue* runningQueue; // running queue
+tcbQueue* runningQueue; // running queue, we could have used a global running TCB as well, there is only one running thread at a time
+tcbQueue* exitedQueue; // when a process calls exit then it will be moved to this queue
 int next_tid = 1; // next thread id
 int tsl_init(int salg);
 int tsl_create_thread(void (*tsf)(void*), void* targ);
@@ -124,8 +127,11 @@ int tsl_gettid();
 // salg is the scheduling algorithm to be used
 int tsl_init(int salg) {
 
-    readyQueue = createReadyQueue();
-    runningQueue = createRunningQueue();
+    schedulingAlg = salg; //set the scheduling algorithm
+
+    readyQueue = createTCBQueue();
+    runningQueue = createTCBQueue();
+    exitedQueue = createTCBQueue();
 
     // Add current(main) thread's TCB to running queue
     TCB* mainTCB = (TCB*)malloc(sizeof(TCB));
@@ -161,6 +167,7 @@ int tsl_create_thread(void (*tsf)(void*), void* targ) {
     newTCB->stack = malloc(TSL_STACKSIZE); // TODO: this should be checked // Allocate memory for the stack
 
     enqueue(readyQueue, newTCB); // Add the new thread to the ready queue
+    readyQueueSize++;
 
     currentThreadCount++; // Increment the number of threads
 
@@ -185,6 +192,44 @@ int tsl_create_thread(void (*tsf)(void*), void* targ) {
     }
 }
 
+//Scheduling algorithms
+void FCFS(TCB* thread) {
+    thread = dequeue(readyQueue);
+    if (readyQueueSize > 0) {
+       readyQueueSize--; 
+    }
+    
+}
+
+void Random(TCB* thread) {
+    srand(time(NULL));
+    int randomIndex = rand() % readyQueueSize + 1;
+    int index = 1;
+    QueueNode* temp = readyQueue->front;
+    QueueNode* prev = NULL;
+    while (temp != NULL) {
+        if (index == randomIndex) {
+                    
+            if (temp == readyQueue->front) {
+                thread = dequeue(readyQueue);
+            } else {
+                thread = temp->tcb;
+                prev->next = temp->next;
+                temp->next = NULL;
+            }
+
+            break;
+        }
+        prev = temp;
+        temp = temp->next;
+        index++;
+    }
+    
+    if (readyQueueSize > 0) {
+       readyQueueSize--; 
+    }
+    
+}
 
 // TODO: STUB should be implemented
 // TODO: STUB SHOULD BE PUT IN THE CORRECT PLACE
@@ -206,34 +251,138 @@ void stub(void (*tsf) (void*), void* targ) {
 // if tid > 0, but no ready thread with the given tid, the function will return TSL_ERROR
 // this function will not return until the calling thread is scheduled to run again
 int tsl_yield(int tid) {
-    int next_tid = 0; // TODO: select the next thread to run
+    int next_tid;
+    TCB* calleeThread = NULL;
+    TCB* callerThread = runningQueue->front->tcb;
+    
+    callerThread->state = TSL_READY;
+    enqueue(readyQueue, callerThread); // add the caller thread to ready queue
+    readyQueueSize++;
+    dequeue(runningQueue); //remove the caller thread
+    
+    if (tid == TSL_ANY) { // pick according to the schedule algorithm
+        if (schedulingAlg == ALG_FCFS) {
+            FCFS(calleeThread);
+        } else if (schedulingAlg == ALG_RANDOM) { //pick a random element from the ready queue (this could result in starvation)
+            Random(calleeThread);
+        }
+    } else { //pick the thread specified by tid
+        QueueNode* temp = readyQueue->front;
+        QueueNode* prev = NULL;
+        while (temp != NULL) {
+            if (temp->tcb->tid == tid) {
+                if (temp == readyQueue->front) {
+                        calleeThread = dequeue(readyQueue);
+                        readyQueueSize--;
+                    } else {
+                        calleeThread = temp->tcb;
+                        prev->next = temp->next;
+                        temp->next = NULL;
+                    }
 
+                break;
+            }
+            prev = temp;
+            temp = temp->next;
+        }
 
-    // TODO: not return until the calling thread is scheduled to run again
-    int success = 1;
-    if (success) {
-        return next_tid;
-    } else {
-        return TSL_ERROR; // TODO: no ready thread with the given tid
+        if (calleeThread != NULL) {
+            readyQueueSize--;
+        } else {
+            /*If tid parameter is a positive integer but there is no ready thread
+            with that tid, the function will return immediately without yielding to any
+            thread.*/
+            return -1;
+        }
     }
+
+
+    //now that the thread to be run is set, put it into the running queue and run it
+    next_tid = calleeThread->tid;
+
+    getcontext(&(callerThread->context)); //save the callers context
+
+    if (callerThread->state == TSL_READY) {
+        //it means the first return, yield to the callee
+        calleeThread->state = TSL_RUNNING;
+        enqueue(runningQueue, calleeThread); //insert the callee thread
+        setcontext(&(calleeThread->context)); //switch context
+    } else {
+        // it means the second return, some other thread has yielded to this thread
+        return next_tid;
+    }
+    
 }
 
 // terminates the calling thread
 // TCB and stack of the calling thread will be kept until another thread calls tsl_join with the tid of the calling thread
 // this function will not return
 int tsl_exit() {
+    //move from running to exited queue
+    TCB* currentThread = dequeue(runningQueue);
+    //currentThread->state = ENDED; might be redundant
+    enqueue(exitedQueue, currentThread);
+    
+    //This enclosed section could be replaced by yield function
+    // I wrote this because I thought that we do not need to save the context of the thread that is exiting
+    // I might be wrong...
+    //---------------------------------------------------------------------------
+    TCB* calleeThread = NULL;
+    if (schedulingAlg == ALG_FCFS) {
+        FCFS(calleeThread);
+    } else if (schedulingAlg == ALG_RANDOM) { //pick a random element from the ready queue (this could result in starvation)
+        Random(calleeThread);
+    }
+    if (calleeThread == NULL) {
+        // readyQueue is empty, free all that is left in the exited queue (if there are any left due to not being joined)
+        TCB* temp;
+        do {
+            temp = dequeue(exitedQueue);
+            free(temp->stack);
+            free(temp);
+        } while(temp != NULL);
+        
+    } else {
+        calleeThread->state = TSL_RUNNING;
+        enqueue(runningQueue, calleeThread);
+        setcontext(&(calleeThread->context));
+    }
+    //---------------------------------------------------------------------------
     return (0);
 }
 
 // waits for the termination of another thread with the given tid, then returns
 // before returning, the TCB and stack of the terminated thread will be deallocated
 int tsl_join(int tid) {
-    int success = 1;
-    if (success) {
-        return tid;
-    } else {
-        return TSL_ERROR; // TODO: no thread with the given tid
+    
+    int result = tsl_yield(tid);
+
+    if (result == -1) {
+        //no such thread in the ready queue
+        return -1;
     }
+
+    //the thread with tid has exited, free its resources
+    QueueNode* exited = exitedQueue->front;
+    QueueNode* prev = NULL;
+    while(exited != NULL) {
+        if (exited->tcb->tid == tid) {
+            if (exited == exitedQueue->front) {
+                TCB* tobeDeleted = dequeue(exitedQueue);
+                free(tobeDeleted->stack);
+                free(tobeDeleted);
+            } else {
+                prev->next = exited ->next;
+                free(exited->tcb->stack);
+                free(exited->tcb);
+                free(exited);
+            }
+        }
+        prev = exited;
+        exited = exited->next;
+    }
+    
+    return tid;
 }
 
 // cancels another thread with the given tid asynchronously, the target thread will be immediately terminated
@@ -248,6 +397,6 @@ int tsl_cancel(int tid) {
 
 // returns the thread id of the calling thread
 int tsl_gettid() {
-
-    return 0; // TODO: return the thread id of the calling thread
+    //Assumption: There is only one thread running at a time
+    return runningQueue->front->tcb->tid; // TODO: return the thread id of the calling thread
 }
