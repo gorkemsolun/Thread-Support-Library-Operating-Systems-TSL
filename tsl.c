@@ -118,14 +118,15 @@ int tsl_exit();
 int tsl_join(int tid);
 int tsl_cancel(int tid);
 int tsl_gettid();
+TCB* removeFromQueue(tcbQueue* queue, int tid);
 
 // This is the main function of the library and library will be initialized here
 // This function will be called exatcly once
 // salg is the scheduling algorithm to be used
 int tsl_init(int salg) {
 
-    readyQueue = createReadyQueue();
-    runningQueue = createRunningQueue();
+    readyQueue = createTCBQueue(); //createReadyQueue();
+    runningQueue = createTCBQueue(); //createRunningQueue();
 
     // Add current(main) thread's TCB to running queue
     TCB* mainTCB = (TCB*)malloc(sizeof(TCB));
@@ -238,16 +239,64 @@ int tsl_join(int tid) {
 
 // cancels another thread with the given tid asynchronously, the target thread will be immediately terminated
 int tsl_cancel(int tid) {
-    int success = 1;
-    if (success) {
-        return tid;
-    } else {
-        return TSL_ERROR; // TODO: no thread with the given tid
+
+    TCB* tcb = removeFromQueue(readyQueue, tid); //if does not exist in ready queue, it will return NULL
+    if(tcb == NULL){
+        tcb = removeFromQueue(runningQueue, tid); 
+        if (tcb == NULL) {
+            return TSL_ERROR; 
+        }
     }
+    
+    free(tcb->stack);
+    free(tcb);
+
+    return TSL_SUCCESS;
+}
+
+// helper function to remove a thread from the queue
+// finds the thread id of the calling thread and removes it
+// returns the TCB pointer of removed thread, returns NULL if tcbQueue is empty
+
+TCB* removeFromQueue(tcbQueue* queue, int tid){
+    if(queue == NULL || queue->front == NULL){
+        return NULL;
+    }
+
+    QueueNode* iterator = queue->front;
+    QueueNode* prev = NULL;
+
+    while(iterator != NULL){
+        if(iterator->tcb->tid == tid){
+            if(prev == NULL){
+                queue->front = iterator->next;
+            } else {
+                prev->next = iterator->next;
+            }
+
+            if(iterator->next == NULL){
+                queue->rear = prev;
+            }
+
+            TCB* tcb = iterator->tcb;
+            free(iterator);
+            return tcb;
+        }
+
+        prev = iterator;
+        iterator = iterator->next;
+    }
+
+    return NULL;
+
 }
 
 // returns the thread id of the calling thread
+// returns 0 if runningQueue is empty
 int tsl_gettid() {
+    if(runningQueue != NULL && runningQueue->front != NULL) {
+        return runningQueue->front->tcb->tid;
+    }
 
-    return 0; // TODO: return the thread id of the calling thread
+    return 0;
 }
