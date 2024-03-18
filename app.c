@@ -19,7 +19,7 @@ void* foo(void* v) {
 
     //while (count < MAXCOUNT) {
     while (1) {
-        printf("thread %d is running (count=%d)\n", mytid, count);
+        printf("thread %d is running (count=%d)     ", mytid, count);
         if (count % YIELDPERIOD == 0) {
             tsl_yield(TSL_ANY);
         }

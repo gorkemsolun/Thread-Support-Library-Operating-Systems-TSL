@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include <malloc.h>
 #include <assert.h>
+#include <time.h>
 
 /* We want the extra information from these definitions */
 #ifndef __USE_GNU
@@ -91,6 +92,7 @@ TCB* dequeue(tcbQueue* queue) {
     }
 
     free(temp);
+    printf("Dequeued tid: %d\n", tcb->tid);
     return tcb;
 }
 
@@ -104,12 +106,15 @@ int isReadyQueueEmpty(tcbQueue* queue) {
 // Define states
 #define TSL_RUNNING 1
 #define TSL_READY 2
+#define TSL_EXIT 3
 
 // Global variables
-
+unsigned int readyQueueSize = 0;
+unsigned int schedulingAlg; // 1 is FCFS, 2 is random
 int currentThreadCount = 0; // Current number of threads
 tcbQueue* readyQueue; // ready queue
 tcbQueue* runningQueue; // running queue
+tcbQueue* exitedQueue; // when a process calls exit then it will be moved to this queue
 int next_tid = 1; // next thread id
 int tsl_init(int salg);
 int tsl_create_thread(void (*tsf)(void*), void* targ);
@@ -120,13 +125,26 @@ int tsl_cancel(int tid);
 int tsl_gettid();
 TCB* removeFromQueue(tcbQueue* queue, int tid);
 
+// TODO: STUB should be implemented
+// TODO: STUB SHOULD BE PUT IN THE CORRECT PLACE
+// stub wrapper function for the thread start function
+void stub(void (*tsf) (void*), void* targ) {
+    // new thread will start its execution here
+    tsf(targ); // then we will call the thread start function
+
+    // tsf will retun to here
+    tsl_exit(); // now ask for termination
+}
+
+
 // This is the main function of the library and library will be initialized here
 // This function will be called exatcly once
 // salg is the scheduling algorithm to be used
 int tsl_init(int salg) {
-
-    readyQueue = createReadyQueue();
-    runningQueue = createRunningQueue();
+    schedulingAlg = salg;
+    readyQueue = createTCBQueue();
+    runningQueue = createTCBQueue();
+    exitedQueue = createTCBQueue();
 
     // Add current(main) thread's TCB to running queue
     TCB* mainTCB = (TCB*)malloc(sizeof(TCB));
@@ -203,16 +221,36 @@ int tsl_create_thread(void (*tsf)(void*), void* targ) {
     /*----------------------------------------------------------------------------------------------------------------*/
 }
 
+TCB* FCFS() {
+    TCB* thread = dequeue(readyQueue);
+    if (readyQueueSize > 0) {
+       readyQueueSize--; 
+    }
+    printf("fcfs tid: %d\n", thread->tid);
+    return thread;
+}
 
-// TODO: STUB should be implemented
-// TODO: STUB SHOULD BE PUT IN THE CORRECT PLACE
-// stub wrapper function for the thread start function
-void stub(void (*tsf) (void*), void* targ) {
-    // new thread will start its execution here
-    tsf(targ); // then we will call the thread start function
-
-    // tsf will retun to here
-    tsl_exit(); // now ask for termination
+TCB* Random() {
+    srand(time(NULL));
+    int randomIndex = rand() % readyQueueSize + 1;
+    QueueNode* iterator = readyQueue->front;
+    int index = 1;
+    int tid = -1;
+    while(iterator != NULL) {
+        if(index == randomIndex) {
+            tid = iterator->tcb->tid;
+        }
+        iterator = iterator->next;
+    }
+    TCB* thread = NULL;
+    if(tid >0) {
+        thread = removeFromQueue(readyQueue, tid); 
+    }
+   
+    if (readyQueueSize > 0) {
+       readyQueueSize--; 
+    }
+    return thread;
 }
 
 // yields the processor to another thread, a context switch will occur
@@ -224,15 +262,52 @@ void stub(void (*tsf) (void*), void* targ) {
 // if tid > 0, but no ready thread with the given tid, the function will return TSL_ERROR
 // this function will not return until the calling thread is scheduled to run again
 int tsl_yield(int tid) {
-    int next_tid = 0; // TODO: select the next thread to run
+    printf("Test ediyoz1.............   ");
+    int next_tid;
+    TCB* calleeThread = NULL;
+    TCB* callerThread = runningQueue->front->tcb;
+    dequeue(runningQueue); //remove the caller thread
+    printf("Test ediyoz2.............   ");
+    callerThread->state = TSL_READY;
+    enqueue(readyQueue, callerThread); // add the caller thread to ready queue
+    readyQueueSize++;
+    printf("Test ediyoz3.............   ");
+    if (tid == TSL_ANY) { // pick according to the schedule algorithm
+        if (schedulingAlg == ALG_FCFS) {
+            calleeThread = FCFS();
+        } else if (schedulingAlg == ALG_RANDOM) { //pick a random element from the ready queue (this could result in starvation)
+            calleeThread =  Random();
+        }
+    } else { //pick the thread specified by tid
+        
+        calleeThread = removeFromQueue(readyQueue, tid);
+        
+        if (calleeThread != NULL) {
+            readyQueueSize--;
+        } else {
+            /*If tid parameter is a positive integer but there is no ready thread
+            with that tid, the function will return immediately without yielding to any
+            thread.*/
+            return -1;
+        }
+    }
 
 
-    // TODO: not return until the calling thread is scheduled to run again
-    int success = 1;
-    if (success) {
-        return next_tid;
+    //now that the thread to be run is set, put it into the running queue and run it
+    next_tid = calleeThread->tid;
+
+    getcontext(&(callerThread->context)); //save the callers context
+
+    if (callerThread->state == TSL_READY) {
+        //it means the first return, yield to the callee
+        calleeThread->state = TSL_RUNNING;
+        enqueue(runningQueue, calleeThread); //insert the callee thread
+        setcontext(&(calleeThread->context)); //switch context
     } else {
-        return TSL_ERROR; // TODO: no ready thread with the given tid
+        // it means the second return, some other thread has yielded to this thread
+        
+        printf("thread %d yielded to thread %d    ",callerThread->tid, next_tid );
+        return next_tid;
     }
 }
 
@@ -240,18 +315,73 @@ int tsl_yield(int tid) {
 // TCB and stack of the calling thread will be kept until another thread calls tsl_join with the tid of the calling thread
 // this function will not return
 int tsl_exit() {
+    //move from running to exited queue
+    TCB* currentThread = dequeue(runningQueue);
+    currentThread->state = TSL_EXIT; 
+    enqueue(exitedQueue, currentThread);
+    
+    //This enclosed section could be replaced by yield function
+    // I wrote this because I thought that we do not need to save the context of the thread that is exiting
+    // I might be wrong...
+    //---------------------------------------------------------------------------
+    TCB* calleeThread = NULL;
+    if (schedulingAlg == ALG_FCFS) {
+        calleeThread = FCFS();
+    } else if (schedulingAlg == ALG_RANDOM) { //pick a random element from the ready queue (this could result in starvation)
+        calleeThread = Random();
+    }
+    if (calleeThread == NULL) {
+        // readyQueue is empty, free all that is left in the exited queue (if there are any left due to not being joined)
+        TCB* temp;
+        do {
+            temp = dequeue(exitedQueue);
+            free(temp->stack);
+            free(temp);
+        } while(temp != NULL);
+        
+    } else {
+        calleeThread->state = TSL_RUNNING;
+        enqueue(runningQueue, calleeThread);
+        setcontext(&(calleeThread->context));
+    }
+    //---------------------------------------------------------------------------
     return (0);
 }
 
 // waits for the termination of another thread with the given tid, then returns
 // before returning, the TCB and stack of the terminated thread will be deallocated
 int tsl_join(int tid) {
-    int success = 1;
-    if (success) {
-        return tid;
-    } else {
-        return TSL_ERROR; // TODO: no thread with the given tid
+    printf("Test ediyoz31.............   ");
+    int result = tsl_yield(tid);
+
+    if (result == -1) {
+        //no such thread in the ready queue
+        return -1;
     }
+
+    while(1) {
+        QueueNode* iterator = exitedQueue->front;
+        TCB* joinedThread = NULL;
+        while(iterator != NULL) {
+            if(iterator->tcb->tid == tid) {
+                joinedThread = iterator->tcb;
+                break;
+            }
+            iterator = iterator->next;
+        }
+
+        if(joinedThread != NULL) {
+            removeFromQueue(exitedQueue, joinedThread->tid);
+            free(joinedThread->stack);
+            free(joinedThread);
+            break;
+        } else {
+            tsl_yield(TSL_ANY);
+        } 
+    } 
+    
+    
+    return tid;
 }
 
 // cancels another thread with the given tid asynchronously, the target thread will be immediately terminated
