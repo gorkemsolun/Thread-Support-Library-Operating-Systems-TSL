@@ -1,84 +1,90 @@
 #include <stdio.h>
-#define __USE_GNU
-#include <ucontext.h>
 #include <stdlib.h>
+#include <unistd.h>
+#include <malloc.h>
+#include <assert.h>
 
-/* redundant
-#undef EAX
-#undef ECX
-#undef EDX
-#undef EBX
-#undef ESP
-#undef EBP
-#undef ESI
-#undef EDI
-#undef EIP
-#ifdef __linux__
-#include <sys/ucontext.h>
-#endif
-*/
+/* We want the extra information from these definitions */
+#ifndef __USE_GNU
+#define __USE_GNU
+#endif /* __USE_GNU */
 
-#define STACK_SIZE 4096
+#include <ucontext.h>
+#include "tsl.h"
 
-ucontext_t uc_main;
-int n = 10;
-int count = 0;
 
-void fun() {
-    ucontext_t uc_fun;
-    getcontext(&uc_fun);
+void* foo(void* v);
 
-    count++;
-    printf("fun\n");
-    
-    swapcontext(&uc_fun, &uc_main);
-    //setcontext(&uc_main);
-}
+void stub(void (*tsf)(void*), void* targ);
+
+// TCB structure
+typedef struct TCB {
+    int tid;               // thread identifier
+    unsigned int state;    // thread state
+    ucontext_t context;    // context structure
+    char* stack;           // pointer to stack
+} TCB;
 
 int main() {
-    ucontext_t uc_fun;
-    void *fun_stack, *main_stack;
+    TCB* newTCB = (TCB*)malloc(sizeof(TCB));
+    newTCB->tid = 1;
+    newTCB->state = 2;
 
-    // Allocate stack for main
-    main_stack = malloc(STACK_SIZE);
-    if (main_stack == NULL) {
-        perror("malloc");
-        exit(1);
-    }
+    newTCB->stack = (char*)malloc(TSL_STACKSIZE); // Allocate memory for the stack
 
-    // Set up main context
-    getcontext(&uc_main);
-    uc_main.uc_link = NULL;
-    uc_main.uc_stack.ss_sp = main_stack;
-    uc_main.uc_stack.ss_size = STACK_SIZE;
+    // Create a new context for the new thread
+    getcontext(&newTCB->context);
 
-    // Allocate stack for fun
-    fun_stack = malloc(STACK_SIZE);
-    if (fun_stack == NULL) {
-        perror("malloc");
-        exit(1);
-    }
+    void (*tsf)(void*) = (void*)&foo;
+    void* targ = 4;
 
-    // Set up fun context
-    getcontext(&uc_fun);
-    uc_fun.uc_link = &uc_main;
-    uc_fun.uc_stack.ss_sp = fun_stack;
-    uc_fun.uc_stack.ss_size = STACK_SIZE;
-    uc_fun.uc_mcontext.gregs[REG_EIP] = (unsigned int)fun;
+    newTCB->context.uc_stack.ss_sp = newTCB->stack;
+    newTCB->context.uc_stack.ss_size = TSL_STACKSIZE;
+    newTCB->context.uc_link = NULL;
+    newTCB->context.uc_mcontext.gregs[REG_EIP] = (unsigned long)stub;
 
-    printf("main\n");
+    size_t size_tsf = sizeof(tsf);  // Calculate size of function pointer
+    size_t size_targ = sizeof(targ);  // Calculate size of void pointer
 
-    // Switch to fun context
-    if(count < n) {
-        //setcontext(&uc_fun);
-        swapcontext(&uc_main, &uc_fun);
-    }
-    //swapcontext(&uc_main, &uc_fun);
-    printf("back to main\n");
+    size_t total_size = size_tsf + size_targ;  // Calculate total size
 
-    // Free allocated stacks
-    free(main_stack);
-    free(fun_stack);
+    //newTCB->context.uc_mcontext.gregs[REG_ESP] = (unsigned long)(newTCB->stack + TSL_STACKSIZE - sizeof(void*));
+    newTCB->context.uc_mcontext.gregs[REG_ESP] = (unsigned long)(newTCB->stack + TSL_STACKSIZE - total_size);
+
+    //void* ptr = (void*) newTCB->stack + TSL_STACKSIZE;
+    printf("%p\n", (void*) (newTCB->stack + TSL_STACKSIZE - total_size));
+    void* ptr = (void*) (newTCB->stack + TSL_STACKSIZE - total_size) + sizeof(void*);
+    printf("%p\n", (void*) ptr);
+    *(void**)ptr = (void*)&foo;
+    ptr = ptr + sizeof(void*);
+    *(void**)ptr = targ;
+    /*
+    char* new_stack = (char*)malloc(sizeof(void) + sizeof(void*));
+    printf("%d\n",sizeof(foo));
+    printf("%d\n",sizeof(void*));
+    */
+
+    //makecontext(&newTCB->context, (void (*)(void))tsf, 1, targ);
+
+    // Start execution of the new context
+    setcontext(&newTCB->context);
 
     return 0;
+}
+
+void* foo(void* v) {
+    int count = 1;
+    int mytid = 31;
+
+    printf("Thread %d started running (first time); at the start function\n", v);
+    return NULL;
+}
+
+void stub(void (*tsf)(void*), void* targ) {
+    printf("tsf: %p\n", (void*)&tsf);
+    printf("targ: %p\n", (void*)&targ);
+
+    printf("Hello World!\n");
+    tsf(targ);
+    exit(0);
 }

@@ -159,7 +159,7 @@ int tsl_create_thread(void (*tsf)(void*), void* targ) {
     TCB* newTCB = (TCB*)malloc(sizeof(TCB));
     newTCB->tid = next_tid++;
     newTCB->state = TSL_READY;
-    newTCB->stack = malloc(TSL_STACKSIZE); // TODO: this should be checked // Allocate memory for the stack
+    newTCB->stack = (char*)malloc(TSL_STACKSIZE);
 
     enqueue(readyQueue, newTCB); // Add the new thread to the ready queue
 
@@ -168,15 +168,30 @@ int tsl_create_thread(void (*tsf)(void*), void* targ) {
     // Create a new context for the new thread
     getcontext(&newTCB->context);
 
-    // TODO: this should be checked
-    newTCB->context.uc_mcontext.gregs[REG_EIP] = (unsigned int)stub; // Set the instruction pointer to the stub function
-    newTCB->context.uc_mcontext.gregs[REG_ESP] = (unsigned int)newTCB->stack; // Set the stack pointer to the top of the stack
-    newTCB->stack += TSL_STACKSIZE; // Move the stack pointer to the bottom of the stack
+    // TODO: This part will be refactored later
+    /*----------------------------------------------------------------------------------------------------------------*/
 
-    // TODO: this should be checked // Initialize the stack by putting tsl and targ into the stack
-    unsigned int* stack_ptr = (unsigned int*)newTCB->context.uc_mcontext.gregs[REG_ESP];
-    *stack_ptr-- = (unsigned int)targ; // Push targ onto the stack
-    *stack_ptr-- = (unsigned int)tsf; // Push tsf onto the stack
+    newTCB->context.uc_stack.ss_sp = newTCB->stack; // Allocate stack frame for the tsf 
+    newTCB->context.uc_stack.ss_size = TSL_STACKSIZE; // Specify tsf stack frame size
+    newTCB->context.uc_link = NULL; // May be unnecessary but this value will always be NULL for this project
+
+    newTCB->context.uc_mcontext.gregs[REG_EIP] = (unsigned int)stub; // Set the instruction pointer to the stub function
+    
+    size_t total_size = sizeof(tsf) + sizeof(targ);
+
+    newTCB->context.uc_mcontext.gregs[REG_ESP] = (unsigned long)(newTCB->stack + TSL_STACKSIZE - total_size);
+    // change the stack pointer field (REG ESP) of the context structure to point to the top of the new stack. 
+
+    void* ptr = (void*) (newTCB->stack + TSL_STACKSIZE - total_size) + sizeof(void*);
+    *(void**)ptr = tsf; // TODO: I am not sure for this line, may require testing this part will be one of the following:
+                        // *(void**)ptr = tsf;
+                        // *(void**)ptr = *tsf;
+                        // *(void**)ptr = (*tsf)(void*);
+
+    ptr = ptr + sizeof(void*);
+    *(void**)ptr = targ;
+
+    // TODO: Now only thing need to be done is to call "setcontext(&newTCB->context)" which will be done in tsl_yield(int id)
 
     int success = 1; // TODO: Success should be handled
     if (success) {
@@ -184,6 +199,8 @@ int tsl_create_thread(void (*tsf)(void*), void* targ) {
     } else {
         return TSL_ERROR;
     }
+
+    /*----------------------------------------------------------------------------------------------------------------*/
 }
 
 
