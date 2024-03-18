@@ -226,7 +226,6 @@ TCB* FCFS() {
     if (readyQueueSize > 0) {
        readyQueueSize--; 
     }
-    printf("fcfs tid: %d\n", thread->tid);
     return thread;
 }
 
@@ -288,6 +287,12 @@ int tsl_yield(int tid) {
             /*If tid parameter is a positive integer but there is no ready thread
             with that tid, the function will return immediately without yielding to any
             thread.*/
+            
+            //yield the cpu back to the caller.
+            removeFromQueue(readyQueue, callerThread->tid);
+            readyQueueSize--;
+            callerThread->state = TSL_RUNNING;
+            enqueue(runningQueue, callerThread);
             return -1;
         }
     }
@@ -317,9 +322,11 @@ int tsl_yield(int tid) {
 int tsl_exit() {
     //move from running to exited queue
     TCB* currentThread = dequeue(runningQueue);
+  
     currentThread->state = TSL_EXIT; 
+ 
     enqueue(exitedQueue, currentThread);
-    
+
     //This enclosed section could be replaced by yield function
     // I wrote this because I thought that we do not need to save the context of the thread that is exiting
     // I might be wrong...
@@ -332,13 +339,12 @@ int tsl_exit() {
     }
     if (calleeThread == NULL) {
         // readyQueue is empty, free all that is left in the exited queue (if there are any left due to not being joined)
-        TCB* temp;
-        do {
-            temp = dequeue(exitedQueue);
+        TCB* temp = dequeue(exitedQueue);
+        while(temp != NULL) {
             free(temp->stack);
             free(temp);
-        } while(temp != NULL);
-        
+            temp = dequeue(exitedQueue);
+        }
     } else {
         calleeThread->state = TSL_RUNNING;
         enqueue(runningQueue, calleeThread);
@@ -351,7 +357,6 @@ int tsl_exit() {
 // waits for the termination of another thread with the given tid, then returns
 // before returning, the TCB and stack of the terminated thread will be deallocated
 int tsl_join(int tid) {
-    printf("Test ediyoz31.............   ");
     int result = tsl_yield(tid);
 
     if (result == -1) {
