@@ -53,13 +53,15 @@ typedef struct TCBQueue {
     QueueNode* front; // pointer to front of the queue
     QueueNode* rear; // pointer to rear of the queue
     int size; // size of the queue
+    char name[20]; // name of the queue
 } TCBQueue;
 
-TCBQueue* createTCBQueue() {
+TCBQueue* createTCBQueue(char* name) {
     TCBQueue* queue = (TCBQueue*)malloc(sizeof(TCBQueue));
     queue->front = NULL;
     queue->rear = NULL;
     queue->size = 0;
+    strcpy(queue->name, name);
     return queue;
 }
 
@@ -78,6 +80,7 @@ int enqueue(TCBQueue* queue, TCB* tcb) {
     }
 
     if (queue->front == NULL || queue->rear == NULL) {
+        printf("Error in enqueueing the thread to the queue\n");
         return TSL_ERROR;
     } else {
         queue->size++;
@@ -88,6 +91,7 @@ int enqueue(TCBQueue* queue, TCB* tcb) {
 // Dequeue from the queue
 TCB* dequeue(TCBQueue* queue) {
     if (queue->front == NULL) {
+        printf("Queue is empty\n");
         return NULL;
     }
 
@@ -109,6 +113,7 @@ TCB* dequeue(TCBQueue* queue) {
 // returns the TCB pointer of removed thread, returns NULL if TCBQueue is empty
 TCB* removeFromQueue(TCBQueue* queue, int tid) {
     if (queue == NULL || queue->front == NULL) {
+        printf("Queue is empty\n");
         return NULL;
     }
 
@@ -137,6 +142,7 @@ TCB* removeFromQueue(TCBQueue* queue, int tid) {
         iterator = iterator->next;
     }
 
+    printf("Thread with tid %d does not exist in the %s\n", tid, queue->name);
     return NULL;
 }
 
@@ -167,13 +173,12 @@ int tsl_gettid();
 
 // Scheduling algorithms
 TCB* FCFS() {
-    TCB* thread = dequeue(readyQueue);
-
-    return thread;
+    return dequeue(readyQueue);
 }
 
 TCB* Random() {
     if (readyQueue->size == 0) {
+        printf("Ready queue is empty\n");
         return NULL;
     }
 
@@ -208,11 +213,12 @@ void stub(void (*tsf) (void*), void* targ) {
 // salg is the scheduling algorithm to be used
 int tsl_init(int salg) {
     schedulingAlg = salg;
-    readyQueue = createTCBQueue();
-    runningQueue = createTCBQueue();
-    exitedQueue = createTCBQueue();
+    readyQueue = createTCBQueue("Ready Queue");
+    runningQueue = createTCBQueue("Running Queue");
+    exitedQueue = createTCBQueue("Exited Queue");
 
     if (readyQueue == NULL || runningQueue == NULL || exitedQueue == NULL) {
+        printf("Error in creating the queues\n");
         return TSL_ERROR;
     }
 
@@ -220,6 +226,7 @@ int tsl_init(int salg) {
     TCB* mainTCB = (TCB*)malloc(sizeof(TCB));
 
     if (mainTCB == NULL) {
+        printf("Error in creating the main TCB\n");
         return TSL_ERROR;
     }
 
@@ -243,6 +250,7 @@ int tsl_init(int salg) {
 // The function will return the thread id(tid) of the new thread, unique among all threads in the application
 int tsl_create_thread(void (*tsf)(void*), void* targ) {
     if (currentThreadCount >= TSL_MAXTHREADS) {
+        printf("Maximum number of threads reached\n");
         return TSL_ERROR; // Maximum number of threads reached
     }
 
@@ -323,6 +331,7 @@ int tsl_yield(int tid) {
 
         // TODO: Should this be checked?
         if (calleeThread == NULL) {
+            printf ("Ready queue is empty\n");
             return TSL_ERROR;
         }
     } else { //pick the thread specified by tid
@@ -335,7 +344,6 @@ int tsl_yield(int tid) {
             removeFromQueue(readyQueue, callerThread->tid);
             callerThread->state = TSL_RUNNING;
             if (enqueue(runningQueue, callerThread) == TSL_ERROR) {
-                printf("Error in enqueueing the caller thread to running queue\n");
                 return TSL_ERROR;
             }
             return TSL_ERROR;
@@ -434,7 +442,6 @@ int tsl_join(int tid) {
         }
     }
 
-
     return tid;
 }
 
@@ -442,23 +449,15 @@ int tsl_join(int tid) {
 int tsl_cancel(int tid) {
     TCB* toBeCancelled = removeFromQueue(readyQueue, tid); //if does not exist in ready queue, it will return NULL
     if (toBeCancelled == NULL) {
-        toBeCancelled = removeFromQueue(runningQueue, tid);
-        if (toBeCancelled == NULL) {
-            return TSL_ERROR;
-        }
-    }
-
-    if (getpid() == toBeCancelled->tid){
-        printf("Cannot cancel the caller thread, use exit()\n");
         return TSL_ERROR;
     }
-    
+
     toBeCancelled->state = TSL_EXIT;
 
     if (enqueue(exitedQueue, toBeCancelled) == TSL_ERROR) {
         return TSL_ERROR;
     }
-    
+
     return TSL_SUCCESS;
 }
 

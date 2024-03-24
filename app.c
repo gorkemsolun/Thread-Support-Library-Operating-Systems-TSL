@@ -66,10 +66,10 @@ int main(int argc, char** argv) {
     argv[1] = "5"; // number of threads
     argv[2] = "2"; // scheduling algorithm
     argc = 7; // number of arguments
-    argv[3] = "14"; // max count
-    argv[4] = "500"; // yield period
-    argv[5] = "100"; // exit period 
-    argv[6] = "10"; // cancel period */
+    argv[3] = "15"; // max count
+    argv[4] = "5"; // yield period
+    argv[5] = "9"; // exit period 
+    argv[6] = "7"; // cancel period */
 
     if (argc != 7) {
         printf("Usage: ./app [number of threads] [schedule algorithm, 1 for FCFS and 2 for RANDOM] ");
