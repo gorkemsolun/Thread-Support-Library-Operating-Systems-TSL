@@ -270,8 +270,6 @@ int tsl_create_thread(void (*tsf)(void*), void* targ) {
 
     getcontext(&newTCB->context);// Create a new context for the new thread
 
-    // TODO: This part will be refactored later (gorkem done this part but it should be checked again)
-
     newTCB->context.uc_mcontext.gregs[REG_EIP] = (unsigned int)stub; // Set the instruction pointer to the stub function
 
     newTCB->context.uc_stack.ss_sp = newTCB->stack; // Allocate stack frame for the tsf 
@@ -284,16 +282,15 @@ int tsl_create_thread(void (*tsf)(void*), void* targ) {
 
     void* ptr = (void*)(newTCB->stack + TSL_STACKSIZE - total_size) + sizeof(void*);
     *(void**)ptr = tsf;
-    // TODO: I am not sure for this line, may require testing this part will be one of the following:
-    // Gorkem: Functions can be passed, so it should be correct to pass the function pointer directly
-    // *(void**)ptr = tsf;
-    // *(void**)ptr = *tsf;
-    // *(void**)ptr = (*tsf)(void*);
 
     ptr = ptr + sizeof(void*);
     *(void**)ptr = targ;
 
     return newTCB->tid;
+}
+
+void prepare_context() {
+
 }
 
 // yields the processor to another thread, a context switch will occur
