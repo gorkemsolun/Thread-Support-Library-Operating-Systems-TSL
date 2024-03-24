@@ -212,7 +212,7 @@ void stub(void (*tsf) (void*), void* targ) {
 // This function will be called exatcly once
 // salg is the scheduling algorithm to be used
 int tsl_init(int salg) {
-    srand(time(NULL)); // TODO: is this really produces a random number?
+    srand(time(NULL));
     schedulingAlg = salg;
     readyQueue = createTCBQueue("Ready Queue");
     runningQueue = createTCBQueue("Running Queue");
@@ -326,11 +326,6 @@ int tsl_yield(int tid) {
         } else if (schedulingAlg == ALG_RANDOM) { //pick a random element from the ready queue (this could result in starvation)
             calleeThread = Random();
         }
-
-        // TODO: Should this be checked?
-        if (calleeThread == NULL) {
-            return TSL_ERROR;
-        }
     } else { //pick the thread specified by tid
         calleeThread = removeFromQueue(readyQueue, tid);
 
@@ -365,10 +360,7 @@ int tsl_yield(int tid) {
         return next_tid;
     }
 
-    return TSL_ERROR; // EDIZ TODO: what should be returned here?
-                      // Efe: TGTM! ----->  // If tid parameter is a positive integer but there is no ready thread
-                                            // with that tid, the function will return immediately without yielding to any
-                                            // thread. In this case it will return -1 as the return value.
+    return TSL_ERROR;
 }
 
 // terminates the calling thread
@@ -469,8 +461,5 @@ int tsl_gettid() {
     }
 
     printf("Error: thread queue is empty");
-    return -1;
-
-    //return 0; // TODO: Is this correct?
-                // Efe: An error might be better here
+    return TSL_ERROR;
 }
