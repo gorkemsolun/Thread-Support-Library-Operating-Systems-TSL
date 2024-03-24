@@ -259,24 +259,24 @@ int tsl_create_thread(void (*tsf)(void*), void* targ) {
 
     currentThreadCount++; // Increment the number of threads
 
-    // Create a new context for the new thread
-    getcontext(&newTCB->context);
+    getcontext(&newTCB->context);// Create a new context for the new thread
 
-    // TODO: This part will be refactored later
-    /*----------------------------------------------------------------------------------------------------------------*/
+    // TODO: This part will be refactored later (gorkem done this part but it should be checked again)
+
+    newTCB->context.uc_mcontext.gregs[REG_EIP] = (unsigned int)stub; // Set the instruction pointer to the stub function
+
     newTCB->context.uc_stack.ss_sp = newTCB->stack; // Allocate stack frame for the tsf 
     newTCB->context.uc_stack.ss_size = TSL_STACKSIZE; // Specify tsf stack frame size
     newTCB->context.uc_link = NULL; // May be unnecessary but this value will always be NULL for this project
 
-    newTCB->context.uc_mcontext.gregs[REG_EIP] = (unsigned int)stub; // Set the instruction pointer to the stub function
-
     size_t total_size = sizeof(tsf) + sizeof(targ);
-
+    // change the stack pointer field (REG ESP) of the context structure to point to the top of the new stack.
     newTCB->context.uc_mcontext.gregs[REG_ESP] = (unsigned long)(newTCB->stack + TSL_STACKSIZE - total_size);
-    // change the stack pointer field (REG ESP) of the context structure to point to the top of the new stack. 
 
     void* ptr = (void*)(newTCB->stack + TSL_STACKSIZE - total_size) + sizeof(void*);
-    *(void**)ptr = tsf; // TODO: I am not sure for this line, may require testing this part will be one of the following:
+    *(void**)ptr = tsf;
+    // TODO: I am not sure for this line, may require testing this part will be one of the following:
+    // Gorkem: Functions can be passed, so it should be correct to pass the function pointer directly
     // *(void**)ptr = tsf;
     // *(void**)ptr = *tsf;
     // *(void**)ptr = (*tsf)(void*);
@@ -284,11 +284,7 @@ int tsl_create_thread(void (*tsf)(void*), void* targ) {
     ptr = ptr + sizeof(void*);
     *(void**)ptr = targ;
 
-    // TODO: Now only thing need to be done is to call "setcontext(&newTCB->context)" which will be done in tsl_yield(int id)
-
-
     return newTCB->tid;
-    /*----------------------------------------------------------------------------------------------------------------*/
 }
 
 // yields the processor to another thread, a context switch will occur
@@ -301,8 +297,10 @@ int tsl_create_thread(void (*tsf)(void*), void* targ) {
 // this function will not return until the calling thread is scheduled to run again
 int tsl_yield(int tid) {
     int next_tid;
+    // Callee and caller threads ***DO NOT confuse with the caller and callee functions***
     TCB* calleeThread = NULL;
     TCB* callerThread = runningQueue->front->tcb;
+
     // remove the caller thread
     if (dequeue(runningQueue) == NULL) {
         return TSL_ERROR;
@@ -315,7 +313,8 @@ int tsl_yield(int tid) {
         return TSL_ERROR;
     }
 
-    if (tid == TSL_ANY) { // pick according to the schedule algorithm
+    // pick according to the schedule algorithm
+    if (tid == TSL_ANY) {
         if (schedulingAlg == ALG_FCFS) {
             calleeThread = FCFS();
         } else if (schedulingAlg == ALG_RANDOM) { //pick a random element from the ready queue (this could result in starvation)
@@ -329,14 +328,10 @@ int tsl_yield(int tid) {
     } else { //pick the thread specified by tid
         calleeThread = removeFromQueue(readyQueue, tid);
 
-        if (calleeThread != NULL) {
-            // TODO: A readuQueueSize variable was here, but it is removed, this should be checked
-        } else {
-            /*If tid parameter is a positive integer but there is no ready thread
-            with that tid, the function will return immediately without yielding to any
-            thread.*/
-
-            //yield the cpu back to the caller.
+        /*If tid parameter is a positive integer but there is no ready thread
+        with that tid, the function will return immediately without yielding to any
+        thread.*/
+        if (calleeThread == NULL) {// yield the cpu back to the caller.
             removeFromQueue(readyQueue, callerThread->tid);
             callerThread->state = TSL_RUNNING;
             if (enqueue(runningQueue, callerThread) == TSL_ERROR) {
@@ -365,7 +360,7 @@ int tsl_yield(int tid) {
         return next_tid;
     }
 
-    return TSL_ERROR; // TODO: return function should be here
+    return TSL_ERROR; // EDIZ TODO: what should be returned here?
 }
 
 // terminates the calling thread
@@ -385,10 +380,6 @@ int tsl_exit() {
         return TSL_ERROR;
     }
 
-    // TODO: This enclosed section could be replaced by yield function
-    // I wrote this because I thought that we do not need to save the context of the thread that is exiting
-    // I might be wrong...
-    //---------------------------------------------------------------------------
     TCB* calleeThread = NULL;
     if (schedulingAlg == ALG_FCFS) {
         calleeThread = FCFS();
@@ -411,7 +402,6 @@ int tsl_exit() {
         }
         setcontext(&(calleeThread->context));
     }
-    //---------------------------------------------------------------------------
     return TSL_SUCCESS;
 }
 
@@ -450,18 +440,25 @@ int tsl_join(int tid) {
 
 // cancels another thread with the given tid asynchronously, the target thread will be immediately terminated
 int tsl_cancel(int tid) {
-
-    TCB* tcb = removeFromQueue(readyQueue, tid); //if does not exist in ready queue, it will return NULL
-    if (tcb == NULL) {
-        tcb = removeFromQueue(runningQueue, tid);
-        if (tcb == NULL) {
+    TCB* toBeCancelled = removeFromQueue(readyQueue, tid); //if does not exist in ready queue, it will return NULL
+    if (toBeCancelled == NULL) {
+        toBeCancelled = removeFromQueue(runningQueue, tid);
+        if (toBeCancelled == NULL) {
             return TSL_ERROR;
         }
     }
 
-    free(tcb->stack);
-    free(tcb);
+    if (getpid() == toBeCancelled->tid){
+        printf("Cannot cancel the caller thread, use exit()\n");
+        return TSL_ERROR;
+    }
+    
+    toBeCancelled->state = TSL_EXIT;
 
+    if (enqueue(exitedQueue, toBeCancelled) == TSL_ERROR) {
+        return TSL_ERROR;
+    }
+    
     return TSL_SUCCESS;
 }
 
