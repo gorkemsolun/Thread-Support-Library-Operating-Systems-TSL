@@ -33,7 +33,7 @@ void* foo(void* v) {
                 printf("Thread %d is yielding to thread %d.\n", mytid, tids[tidIndex]);
                 int res = tsl_yield(tids[tidIndex]);
                 if (res == -1) {
-                    printf("Thread %d is cannot be yielded.\n", tids[tidIndex]);
+                    printf("Thread %d cannot be yielded.\n", tids[tidIndex]);
                 }
             } else { // if even, yielding will be done by selecting any from the queue
                 printf("Thread %d is yielding.\n", mytid);
@@ -51,7 +51,7 @@ void* foo(void* v) {
             printf("Thread %d is cancelling thread %d.\n", mytid, tids[tidIndex]);
             int res = tsl_cancel(tids[tidIndex]);
             if (res == -1) {
-                printf("Thread %d is cannot be cancelled.\n", tids[tidIndex]);
+                printf("Thread %d cannot be cancelled.\n", tids[tidIndex]);
             }
         }
 
