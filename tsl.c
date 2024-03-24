@@ -183,7 +183,6 @@ TCB* Random() {
         return NULL;
     }
 
-    srand(time(NULL)); // TODO: is this really produces a random number?
     int randomIndex = rand() % readyQueue->size;
     QueueNode* iterator = readyQueue->front;
 
@@ -213,6 +212,7 @@ void stub(void (*tsf) (void*), void* targ) {
 // This function will be called exatcly once
 // salg is the scheduling algorithm to be used
 int tsl_init(int salg) {
+    srand(time(NULL)); // TODO: is this really produces a random number?
     schedulingAlg = salg;
     readyQueue = createTCBQueue("Ready Queue");
     runningQueue = createTCBQueue("Running Queue");
