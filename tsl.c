@@ -4,6 +4,7 @@
 #include <malloc.h>
 #include <assert.h>
 #include <time.h>
+#include <string.h>
 
 /* We want the extra information from these definitions */
 #ifndef __USE_GNU
