@@ -23,7 +23,7 @@ void* foo(void* v) {
     int count = 1;
     while (count != maxcount) {
         printf("Thread %d is running (count = %d).\n", mytid, count);
-        srand(time(NULL) ^ getpid());
+        srand(time(NULL));
         int random_number = rand();
         int tidIndex = random_number % numberOfThreads;
 

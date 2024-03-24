@@ -92,7 +92,7 @@ int enqueue(TCBQueue* queue, TCB* tcb) {
 // Dequeue from the queue
 TCB* dequeue(TCBQueue* queue) {
     if (queue->front == NULL) {
-        printf("Queue is empty\n");
+        printf("%s is empty\n", queue->name);
         return NULL;
     }
 
@@ -114,7 +114,7 @@ TCB* dequeue(TCBQueue* queue) {
 // returns the TCB pointer of removed thread, returns NULL if TCBQueue is empty
 TCB* removeFromQueue(TCBQueue* queue, int tid) {
     if (queue == NULL || queue->front == NULL) {
-        printf("Queue is empty\n");
+        printf("%s is empty\n", queue->name);
         return NULL;
     }
 
@@ -179,11 +179,11 @@ TCB* FCFS() {
 
 TCB* Random() {
     if (readyQueue->size == 0) {
-        printf("Ready queue is empty\n");
+        printf("Ready Queue is empty\n");
         return NULL;
     }
 
-    srand(time(NULL) ^ getpid()); // TODO: is this really produces a random number?
+    srand(time(NULL)); // TODO: is this really produces a random number?
     int randomIndex = rand() % readyQueue->size;
     QueueNode* iterator = readyQueue->front;
 
@@ -332,7 +332,6 @@ int tsl_yield(int tid) {
 
         // TODO: Should this be checked?
         if (calleeThread == NULL) {
-            printf ("Ready queue is empty\n");
             return TSL_ERROR;
         }
     } else { //pick the thread specified by tid
