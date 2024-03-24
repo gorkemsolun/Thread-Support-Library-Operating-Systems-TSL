@@ -62,19 +62,24 @@ void* foo(void* v) {
 
 
 int main(int argc, char** argv) {
+    /* // for testing 
     argv[1] = "5"; // number of threads
     argv[2] = "2"; // scheduling algorithm
     argc = 7; // number of arguments
     argv[3] = "14"; // max count
     argv[4] = "500"; // yield period
     argv[5] = "100"; // exit period 
-    argv[6] = "10"; // cancel period
+    argv[6] = "10"; // cancel period */
 
     if (argc != 7) {
         printf("Usage: ./app [number of threads] [schedule algorithm, 1 for FCFS and 2 for RANDOM] ");
         printf("[Maxiumum count to count] [yield period of counting] [exit period of counting] [cancel period of counting, for cancelling a random thread]\n");
         exit(1);
     }
+
+    clock_t start, end;
+    double cpu_time_used;
+    start = clock();
 
     numberOfThreads = atoi(argv[1]);
     alg = atoi(argv[2]);
@@ -88,7 +93,7 @@ int main(int argc, char** argv) {
         exit(1);
     }
 
-    // tid[0] is the id of the main thread
+    // The id of the main thread
     tids[0] = tsl_init(alg);
 
     for (int i = 1; i < numberOfThreads; ++i) {
@@ -105,6 +110,10 @@ int main(int argc, char** argv) {
 
     printf("Main thread calling tlib_exit\n");
     tsl_exit();
+
+    end = clock();
+    cpu_time_used = ((double) (end - start)) / CLOCKS_PER_SEC;
+    printf("Time elapsed is %f seconds\n", cpu_time_used);
 
     return 0;
 }
