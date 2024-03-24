@@ -92,7 +92,6 @@ int enqueue(TCBQueue* queue, TCB* tcb) {
 // Dequeue from the queue
 TCB* dequeue(TCBQueue* queue) {
     if (queue->front == NULL) {
-        printf("%s is empty\n", queue->name);
         return NULL;
     }
 
@@ -114,7 +113,6 @@ TCB* dequeue(TCBQueue* queue) {
 // returns the TCB pointer of removed thread, returns NULL if TCBQueue is empty
 TCB* removeFromQueue(TCBQueue* queue, int tid) {
     if (queue == NULL || queue->front == NULL) {
-        printf("%s is empty\n", queue->name);
         return NULL;
     }
 
@@ -142,8 +140,6 @@ TCB* removeFromQueue(TCBQueue* queue, int tid) {
         prev = iterator;
         iterator = iterator->next;
     }
-
-    printf("Thread with tid %d does not exist in the %s\n", tid, queue->name);
     return NULL;
 }
 
@@ -179,7 +175,6 @@ TCB* FCFS() {
 
 TCB* Random() {
     if (readyQueue->size == 0) {
-        printf("Ready Queue is empty\n");
         return NULL;
     }
 
@@ -287,10 +282,6 @@ int tsl_create_thread(void (*tsf)(void*), void* targ) {
     *(void**)ptr = targ;
 
     return newTCB->tid;
-}
-
-void prepare_context() {
-
 }
 
 // yields the processor to another thread, a context switch will occur
@@ -459,7 +450,5 @@ int tsl_gettid() {
     if (runningQueue != NULL && runningQueue->front != NULL) {
         return runningQueue->front->tcb->tid;
     }
-
-    printf("Error: thread queue is empty");
     return TSL_ERROR;
 }
