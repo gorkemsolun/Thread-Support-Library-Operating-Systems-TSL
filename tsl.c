@@ -366,6 +366,9 @@ int tsl_yield(int tid) {
     }
 
     return TSL_ERROR; // EDIZ TODO: what should be returned here?
+                      // Efe: TGTM! ----->  // If tid parameter is a positive integer but there is no ready thread
+                                            // with that tid, the function will return immediately without yielding to any
+                                            // thread. In this case it will return -1 as the return value.
 }
 
 // terminates the calling thread
@@ -465,5 +468,9 @@ int tsl_gettid() {
         return runningQueue->front->tcb->tid;
     }
 
-    return 0; // TODO: Is this correct?
+    printf("Error: thread queue is empty");
+    return -1;
+
+    //return 0; // TODO: Is this correct?
+                // Efe: An error might be better here
 }
